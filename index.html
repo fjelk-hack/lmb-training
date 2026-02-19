@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0f172a"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="LMB Träning"/>
+  <meta name="description" content="Träningsverktyg för läkemedelsberäkning – sjuksköterskestudent"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon.svg"/>
+  <title>LMB Träning 💊</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, 'Segoe UI', sans-serif; overscroll-behavior: none; }
+    #root { max-width: 520px; margin: 0 auto; }
+    button { font-family: inherit; }
+    input { font-family: inherit; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const EXAM_DATE = new Date("2026-04-07");
+const TODAY = new Date();
+const DAYS_LEFT = Math.max(0, Math.ceil((EXAM_DATE - TODAY) / (1000 * 60 * 60 * 24)));
+
+const CATEGORIES = {
+  SPADNING: { label: "Spädning", color: "#6366f1", icon: "🧪" },
+  INFUSION:  { label: "Infusion & Dropptakt", color: "#0891b2", icon: "💧" },
+  DOS:       { label: "Dosberäkning", color: "#059669", icon: "💊" },
+  SYRGAS:    { label: "Syrgas", color: "#d97706", icon: "🫁" },
+  BEGREPP:   { label: "Enheter & Begrepp", color: "#7c3aed", icon: "📐" },
+};
+
+const QUESTIONS = [
+  // ── SPÄDNING ──────────────────────────────────────────────────
+  { id:1, cat:"SPADNING", src:"Exempeltenta 1 / LMB Nivå 2",
+    q:"Du ska späda morfin 10 mg/ml till styrkan 0,5 mg/ml och den exakta volymen 10 ml.\n(a) Hur mycket läkemedel drar du upp i sprutan?\n(b) Hur mycket spädningsvätska NaCl 9 mg/ml tillsätter du?",
+    type:"calc", parts:[
+      {label:"(a) Morfin", answer:"0,5", unit:"ml", hint:"Önskad mängd: 10 ml × 0,5 mg/ml = 5 mg. Volymen: 5 mg ÷ 10 mg/ml = 0,5 ml"},
+      {label:"(b) NaCl", answer:"9,5", unit:"ml", hint:"10 ml − 0,5 ml = 9,5 ml NaCl"}]},
+  { id:2, cat:"SPADNING", src:"Exempeltenta 2",
+    q:"Du ska späda morfin 10 mg/ml till styrkan 0,1 mg/ml och den exakta volymen 50 ml.\n(a) Hur mycket läkemedel drar du upp i sprutan?\n(b) Hur mycket spädningsvätska NaCl 9 mg/ml tillsätter du?",
+    type:"calc", parts:[
+      {label:"(a) Morfin", answer:"0,5", unit:"ml", hint:"50 ml × 0,1 mg/ml = 5 mg. 5 mg ÷ 10 mg/ml = 0,5 ml"},
+      {label:"(b) NaCl", answer:"49,5", unit:"ml", hint:"50 ml − 0,5 ml = 49,5 ml NaCl"}]},
+  { id:3, cat:"SPADNING", src:"Läkemedelsberäkning 2",
+    q:"Beräkna hur du bereder Morfin 10 mg/ml till styrkan 1 mg/ml och volymen 20 ml med NaCl.\n(a) Hur många ml morfin?\n(b) Hur många ml NaCl?",
+    type:"calc", parts:[
+      {label:"(a) Morfin", answer:"2", unit:"ml", hint:"20 ml × 1 mg/ml = 20 mg. 20 mg ÷ 10 mg/ml = 2 ml morfin"},
+      {label:"(b) NaCl", answer:"18", unit:"ml", hint:"20 ml − 2 ml = 18 ml NaCl"}]},
+  { id:4, cat:"SPADNING", src:"Exempeltenta 1 / LMB Nivå 2",
+    q:"Till en infusionspump kopplas en morfinlösning (styrka 1 mg/ml).\n(a) Hur många ml koksalt tillsätts om 4 ampuller à 1 ml morfin 10 mg/ml används?\n(b) Vad ställs pumpens hastighet in på om den ska ge 1,5 mg i timmen?",
+    type:"calc", parts:[
+      {label:"(a) Koksalt", answer:"36", unit:"ml", hint:"4 amp × 1 ml × 10 mg/ml = 40 mg. Totalvolym: 40 ÷ 1 = 40 ml. Koksalt: 40 − 4 = 36 ml"},
+      {label:"(b) Pump", answer:"1,5", unit:"ml/h", hint:"1,5 mg/h ÷ 1 mg/ml = 1,5 ml/h"}]},
+  { id:5, cat:"SPADNING", src:"Exempeltenta 2",
+    q:"Till en infusionspump kopplas en morfinlösning (1 mg/ml).\n(a) Hur många ml koksalt tillsätts om du drar upp 2 ml morfin 10 mg/ml?\n(b) Vilken hastighet ställer du in om infusionen ska pågå kontinuerligt under 4 timmar?",
+    type:"calc", parts:[
+      {label:"(a) Koksalt", answer:"18", unit:"ml", hint:"2 ml × 10 = 20 mg. Totalvolym: 20 ÷ 1 = 20 ml. Koksalt: 20 − 2 = 18 ml"},
+      {label:"(b) Hastighet", answer:"5", unit:"ml/h", hint:"20 ml ÷ 4 h = 5 ml/h"}]},
+  { id:6, cat:"SPADNING", src:"Exempeltenta 1 / LMB Nivå 2",
+    q:"En kvinna får hjärtstopp. Ordineras Adrenalin 0,1 mg/ml, 1,5 mg intratrakeal. I förrådet finns bara Adrenalin 1 mg/ml.\nHur många ml NaCl 9 mg/ml ska du tillsätta 2 ml Adrenalin för att få styrkan 0,1 mg/ml?",
+    type:"calc", parts:[
+      {label:"NaCl", answer:"18", unit:"ml", hint:"2 ml × 1 mg/ml = 2 mg. Totalvolym: 2 ÷ 0,1 = 20 ml. NaCl: 20 − 2 = 18 ml"}]},
+  { id:7, cat:"SPADNING", src:"Läkemedelsberäkning 2",
+    q:"Adrenalin 0,4 mg ska ges iv pga allergisk reaktion. Adrenalin 1 mg/ml ska spädas till 0,01%.\nHur många ml koksalt tillsätter du 0,5 ml Adrenalin?",
+    type:"calc", parts:[
+      {label:"Koksalt", answer:"4,5", unit:"ml", hint:"0,01% = 0,1 mg/ml. 0,5 ml × 1 mg/ml = 0,5 mg. Totalvolym: 0,5 ÷ 0,1 = 5 ml. Koksalt: 5 − 0,5 = 4,5 ml"}]},
+  { id:8, cat:"SPADNING", src:"Exempeltenta 1_2",
+    q:"10 ml Cyklokapron 100 mg/ml spädas med 100 ml NaCl till totalvolym 110 ml.\nVilken styrka (avrundat till heltal) får lösningen?",
+    type:"mc", options:["9 mg/ml","10 mg/ml","91 mg/ml","100 mg/ml","110 mg/ml"], correct:0,
+    explanation:"10 ml × 100 mg/ml = 1000 mg i 110 ml. 1000 ÷ 110 ≈ 9 mg/ml"},
+  { id:9, cat:"SPADNING", src:"Exempeltenta 2_1",
+    q:"10 ml Cyklokapron 100 mg/ml spädas med 90 ml NaCl (total volym 100 ml).\nVilken styrka får lösningen?",
+    type:"mc", options:["5 mg/ml","9 mg/ml","10 mg/ml","90 mg/ml","100 mg/ml"], correct:2,
+    explanation:"10 ml × 100 mg/ml = 1000 mg i 100 ml total. 1000 ÷ 100 = 10 mg/ml"},
+  { id:10, cat:"SPADNING", src:"Exempeltenta 2",
+    q:"Ett läkemedel med styrkan 4 mg/ml ska spädas till volymen 100 ml med styrkan 0,5 mg/ml.\n(a) Hur mycket läkemedel ska mätas upp?\n(b) Hur mycket spädningsvätska ska tillsättas?",
+    type:"calc", parts:[
+      {label:"(a) Läkemedel", answer:"12,5", unit:"ml", hint:"100 ml × 0,5 mg/ml = 50 mg. 50 ÷ 4 = 12,5 ml"},
+      {label:"(b) Spädningsvätska", answer:"87,5", unit:"ml", hint:"100 − 12,5 = 87,5 ml"}]},
+  { id:11, cat:"SPADNING", src:"Exempeltenta 2_1",
+    q:"En flicka ska ha 0,6 mg morfin iv. Morfin 10 mg/ml späds till 1 mg/ml.\n(a) Hur många ml NaCl tillsätts 1 ml morfin 10 mg/ml?\n(b) Hur många ml ges till flickan?",
+    type:"calc", parts:[
+      {label:"(a) NaCl", answer:"9", unit:"ml", hint:"1 ml × 10 mg/ml = 10 mg. Totalvolym: 10 ÷ 1 = 10 ml. NaCl: 10 − 1 = 9 ml"},
+      {label:"(b) Dos", answer:"0,6", unit:"ml", hint:"0,6 mg ÷ 1 mg/ml = 0,6 ml"}]},
+  { id:12, cat:"SPADNING", src:"Läkemedelsberäkning 2",
+    q:"Du har gjort en spädning med 2 ml Petidin 50 mg/ml och 8 ml NaCl (totalt 10 ml).\nHur mycket av den spädda lösningen ska du ge om patienten ordineras 30 mg?",
+    type:"calc", parts:[
+      {label:"Dos att ge", answer:"3", unit:"ml", hint:"Styrka: (2×50) ÷ 10 = 10 mg/ml. Dos: 30 ÷ 10 = 3 ml"}]},
+  { id:13, cat:"SPADNING", src:"Exempeltenta 1",
+    q:"En kvinna (fotledsfraktur) ska ha 60 mg Petidin iv. Sjuksköterskan späder 2 ml Petidin 50 mg/ml till styrkan 10 mg/ml.\nHur många ml NaCl behöver hen tillsätta?",
+    type:"calc", parts:[
+      {label:"NaCl", answer:"8", unit:"ml", hint:"2 ml × 50 = 100 mg. Totalvolym: 100 ÷ 10 = 10 ml. NaCl: 10 − 2 = 8 ml"}]},
+  { id:14, cat:"SPADNING", src:"Exempeltenta 2",
+    q:"En kvinna (fotledsfraktur) ska ha 50 mg Petidin iv. Sjuksköterskan späder 1,5 ml Petidin 50 mg/ml till styrkan 10 mg/ml.\nHur många ml NaCl behöver hen tillsätta?",
+    type:"calc", parts:[
+      {label:"NaCl", answer:"6", unit:"ml", hint:"1,5 ml × 50 = 75 mg. Totalvolym: 75 ÷ 10 = 7,5 ml. NaCl: 7,5 − 1,5 = 6 ml"}]},
+  { id:15, cat:"SPADNING", src:"Läkemedelsberäkning 2",
+    q:"Torrampull Brietal® 0,5 g ska spädas till styrkan 20 mg/ml.\nHur många ml NaCl 9 mg/ml ska du späda med?",
+    type:"calc", parts:[
+      {label:"NaCl", answer:"25", unit:"ml", hint:"0,5 g = 500 mg. 500 ÷ 20 = 25 ml NaCl"}]},
+  { id:16, cat:"SPADNING", src:"Exempeltenta 3",
+    q:"En ampull Brietal® 0,5 g ska spädas till styrkan 10 mg/ml.\nHur många ml NaCl ska du späda med?",
+    type:"calc", parts:[
+      {label:"NaCl", answer:"50", unit:"ml", hint:"0,5 g = 500 mg. 500 ÷ 10 = 50 ml NaCl"}]},
+  { id:17, cat:"SPADNING", src:"Läkemedelsberäkning 2",
+    q:"10 ampuller à 5 ml Xylocard 20 mg/ml tillsätts 950 ml Glukos.\nNär halva infusionen gått in – hur mycket verksam substans Xylocard har patienten fått?",
+    type:"calc", parts:[
+      {label:"Substans", answer:"500", unit:"mg", hint:"Total: 10 × 5 ml × 20 mg/ml = 1000 mg. Halva: 1000 ÷ 2 = 500 mg"}]},
+  // ── INFUSION ───────────────────────────────────────────────────
+  { id:18, cat:"INFUSION", src:"Exempeltenta 1 / LMB Nivå 2",
+    q:"1000 ml Rehydrex ges med hastigheten 7 ml/kg/h till en patient som väger 70 kg.\n(a) Hur många ml/h ska infusionspumpen ställas in på?\n(b) Vilken dropptakt (dr/min) motsvarar det? (20 dr/ml)",
+    type:"calc", parts:[
+      {label:"(a) ml/h", answer:"490", unit:"ml/h", hint:"7 ml/kg/h × 70 kg = 490 ml/h"},
+      {label:"(b) Dropptakt", answer:"163", unit:"dr/min", hint:"490 ml/h ÷ 60 min × 20 dr/ml = 163,3 ≈ 163 dr/min"}]},
+  { id:19, cat:"INFUSION", src:"Exempeltenta 2",
+    q:"1500 ml Rehydrex ges med 10 ml/kg/h till en patient (65 kg).\n(a) Hur många ml/h ska infusionspumpen ställas in på?\n(b) Efter 1 timme och 20 minuter avbryts infusionen. Hur många ml har administrerats? (heltal)",
+    type:"calc", parts:[
+      {label:"(a) ml/h", answer:"650", unit:"ml/h", hint:"10 ml/kg/h × 65 kg = 650 ml/h"},
+      {label:"(b) Administrerat", answer:"867", unit:"ml", hint:"1 h 20 min = 1,333 h. 650 × 1,333 ≈ 867 ml"}]},
+  { id:20, cat:"INFUSION", src:"Exempeltenta 2_1",
+    q:"Patient ordineras 1000 ml Glukos + Addex Kaliumklorid 60 mmol (styrka 2 mmol/ml).\n(a) Hur många ml Addex-K ska tillsättas?\n(b) Vad blir dropptakten om patienten ska få högst 10 mmol K/h? (20 dr/ml)",
+    type:"calc", parts:[
+      {label:"(a) Addex-K", answer:"30", unit:"ml", hint:"60 mmol ÷ 2 mmol/ml = 30 ml"},
+      {label:"(b) Dropptakt", answer:"57", unit:"dr/min", hint:"10 mmol/h → 6 h för 60 mmol. Totalvolym 1030 ml. 1030 × 20 ÷ 360 ≈ 57 dr/min"}]},
+  { id:21, cat:"INFUSION", src:"Läkemedelsberäkning 2",
+    q:"Infusion Ringer-Acetat 1000 ml. (1 ml = 20 droppar)\n(a) Vilken dropptakt ställs in om infusionen ska gå in under 12 timmar?\n(b) Vilken hastighet (ml/h) om den ska gå in under 4 timmar?",
+    type:"calc", parts:[
+      {label:"(a) Dropptakt 12h", answer:"28", unit:"dr/min", hint:"1000 × 20 ÷ (12 × 60) = 20000 ÷ 720 ≈ 28 dr/min"},
+      {label:"(b) ml/h 4h", answer:"250", unit:"ml/h", hint:"1000 ml ÷ 4 h = 250 ml/h"}]},
+  { id:22, cat:"INFUSION", src:"Läkemedelsberäkning 3",
+    q:"Kl. 07:30 kopplas Ringer-Acetat 500 ml som ska infunderas på 5 timmar. (20 dr/ml)\n(a) Vilken dropptakt ställer du in?\n(b) Kl. 10:00 (2,5 h senare) avbryts infusionen – hur mycket (ml, en decimal) har administrerats?",
+    type:"calc", parts:[
+      {label:"(a) Dropptakt", answer:"33", unit:"dr/min", hint:"500 × 20 ÷ (5 × 60) = 10000 ÷ 300 = 33,3 ≈ 33 dr/min"},
+      {label:"(b) Administrerat", answer:"247,5", unit:"ml", hint:"33 dr/min ÷ 20 dr/ml = 1,65 ml/min. 150 min × 1,65 = 247,5 ml"}]},
+  { id:23, cat:"INFUSION", src:"Exempeltenta 2",
+    q:"Om dropphastigheten är 50 droppar/minut, hur lång tid tar infusion av 1000 ml? (20 dr/ml)\nAnge svaret i hela timmar och minuter.",
+    type:"calc", parts:[
+      {label:"Tid", answer:"6 timmar och 40 minuter", unit:"", hint:"1000 × 20 = 20 000 dr. 20 000 ÷ 50 = 400 min = 6 h 40 min"}]},
+  { id:24, cat:"INFUSION", src:"Exempeltenta 2",
+    q:"En intravenös infusion avbryts efter 2 timmar. Dropptakten var 45 droppar/minut. (20 dr/ml)\nHur stor volym infusionsvätska har patienten fått?",
+    type:"mc", options:["225 ml","270 ml","315 ml","450 ml","540 ml"], correct:1,
+    explanation:"45 dr/min ÷ 20 dr/ml = 2,25 ml/min. 2 h = 120 min. 2,25 × 120 = 270 ml"},
+  { id:25, cat:"INFUSION", src:"Exempeltenta 3",
+    q:"Glukos Baxter 50 mg/ml ges iv med 40 dr/min. (20 dr/ml)\nHur många ml har patienten fått efter 1,5 timmar?",
+    type:"calc", parts:[
+      {label:"Volym", answer:"180", unit:"ml", hint:"40 ÷ 20 = 2 ml/min. 1,5 h = 90 min. 2 × 90 = 180 ml"}]},
+  { id:26, cat:"INFUSION", src:"Läkemedelsberäkning 2",
+    q:"Patient ordineras 80 mmol Addens-NaCl (4 mmol/ml) och 40 mmol Addens-K (2 mmol/ml) som tillsätts 1000 ml glukos.\n(a) Hur många ml NaCl-tillägg?\n(b) Hur många ml K-tillägg?",
+    type:"calc", parts:[
+      {label:"(a) NaCl-tillägg", answer:"20", unit:"ml", hint:"80 mmol ÷ 4 mmol/ml = 20 ml"},
+      {label:"(b) K-tillägg", answer:"20", unit:"ml", hint:"40 mmol ÷ 2 mmol/ml = 20 ml"}]},
+  { id:27, cat:"INFUSION", src:"Exempeltenta 1 / LMB Nivå 2",
+    q:"Furix® 10 mg/ml, 25 ml i 475 ml NaCl. Dropphastighet 75 dr/min (20 dr/ml).\nNär ca 150 ml återstår avbryts infusionen.\nHur mycket verksam substans furosemid har patienten fått?",
+    type:"mc", options:["50 mg","175 mg","150 ml","0,02 mg/ml","0,5 mg","10 mg/ml","350 ml"], correct:1,
+    explanation:"Total: 500 ml / 250 mg. Givet: 500−150 = 350 ml. 350/500 × 250 = 175 mg"},
+  { id:28, cat:"INFUSION", src:"Exempeltenta 2",
+    q:"Furix® 10 mg/ml, 25 ml i 475 ml NaCl. Dropphastighet 50 dr/min.\nNär ca 200 ml återstår avbryts infusionen.\nHur mycket verksam substans furosemid har patienten fått?",
+    type:"mc", options:["1,583 mg","250 mg","150 mg","10 mg/ml","0,02 mg/ml","100 mg","50 mg","175 mg"], correct:2,
+    explanation:"Total: 500 ml / 250 mg. Givet: 500−200 = 300 ml. 300/500 × 250 = 150 mg"},
+  { id:29, cat:"INFUSION", src:"Läkemedelsberäkning 3",
+    q:"Morfin 10 mg/ml späds: 1 ml morfin + 9 ml NaCl → 1 mg/ml totalt 10 ml.\nMorfinet ska ges 6 ml på 5 minuter via sprutpump (inställd i ml/h).\nVilken hastighet (ml/h) ställer du in?",
+    type:"calc", parts:[
+      {label:"Hastighet", answer:"72", unit:"ml/h", hint:"6 ml ÷ 5 min = 1,2 ml/min. × 60 = 72 ml/h"}]},
+  // ── DOSBERÄKNING ──────────────────────────────────────────────
+  { id:30, cat:"DOS", src:"Exempeltenta 1 / LMB Nivå 2",
+    q:"Cyklokapron 10 mg/kg ska ges var tolfte timme till en patient (80 kg). Max hastighet 1 ml/min. (Cyklokapron 100 mg/ml)\nHur lång tid tar injektionen?",
+    type:"calc", parts:[
+      {label:"Tid", answer:"8", unit:"minuter", hint:"Dos: 10×80 = 800 mg. Volym: 800÷100 = 8 ml. Max: 1 ml/min → 8 min"}]},
+  { id:31, cat:"DOS", src:"Exempeltenta 2",
+    q:"Cyklokapron 10 mg/kg ska ges var tolfte timme till en patient (70 kg). Max hastighet 1 ml/min. (Cyklokapron 100 mg/ml)\nHur lång tid tar infusionen?",
+    type:"calc", parts:[
+      {label:"Tid", answer:"7", unit:"minuter", hint:"Dos: 10×70 = 700 mg. Volym: 700÷100 = 7 ml. Max: 1 ml/min → 7 min"}]},
+  { id:32, cat:"DOS", src:"Exempeltenta 1_2 / LMB Nivå 2",
+    q:"Premedicinering: Morfin-Skopolamin Meda, 5 mg + 0,2 mg. (Morfin 10 mg/ml, Skopolamin 0,4 mg/ml)\nVilken dos ska dras upp i sprutan?",
+    type:"mc", options:["10,4 mg/ml","(5+0,2) ml","(10+0,4) mg/ml","5,2 ml","5,2 mg","0,5 ml"], correct:5,
+    explanation:"Morfin: 5÷10=0,5 ml. Skopolamin: 0,2÷0,4=0,5 ml. Samma volym → 0,5 ml"},
+  { id:33, cat:"DOS", src:"Exempeltenta 2_1",
+    q:"Premedicinering: Morfin-Skopolamin Meda, 7,5 mg + 0,3 mg. (Morfin 10 mg/ml, Skopolamin 0,4 mg/ml)\nVilken dos ska dras upp i sprutan?",
+    type:"mc", options:["(10+0,4) mg/ml","7,8 ml","0,75 mg","7,8 mg","0,75 ml","10,4 mg/ml"], correct:4,
+    explanation:"Morfin: 7,5÷10=0,75 ml. Skopolamin: 0,3÷0,4=0,75 ml. Svar: 0,75 ml"},
+  { id:34, cat:"DOS", src:"Exempeltenta 3",
+    q:"Premedicinering: Morfin-Skopolamin Meda, 5 mg + 0,2 mg. (Morfin 10 mg/ml, Skopolamin 0,4 mg/ml)\nVilken dos (ml) drar du upp i sprutan?",
+    type:"calc", parts:[
+      {label:"Dos", answer:"0,5", unit:"ml", hint:"Morfin: 5÷10=0,5 ml. Skopolamin: 0,2÷0,4=0,5 ml. → 0,5 ml"}]},
+  { id:35, cat:"DOS", src:"Läkemedelsberäkning 1",
+    q:"Din patient är ordinerad 25 mg Petidin (styrka 50 mg/ml).\nVilken volym ska ges?",
+    type:"calc", parts:[
+      {label:"Volym", answer:"0,5", unit:"ml", hint:"25 mg ÷ 50 mg/ml = 0,5 ml"}]},
+  { id:36, cat:"DOS", src:"Läkemedelsberäkning 1",
+    q:"Patient har ordinerats 15 mg Waran initialt. Tabletter: Waran 2,5 mg.\nVilken dos (antal tabletter) ska ges?",
+    type:"calc", parts:[
+      {label:"Tabletter", answer:"6", unit:"tabletter", hint:"15 mg ÷ 2,5 mg/tabl = 6 tabletter"}]},
+  { id:37, cat:"DOS", src:"Läkemedelsberäkning 1",
+    q:"Patient behandlas med kapsel Dalacin 150 mg, 1 kapsel × 3/dag. Byte till oral lösning Dalacin 15 mg/ml pga sväljsvårigheter.\nHur ser motsvarande dosering ut?",
+    type:"mc", options:["30 ml","10 ml × 3","450 mg × 3","2250 mg","10 ml","2250 mg × 3","0,1 ml × 3"], correct:1,
+    explanation:"150 mg per dos ÷ 15 mg/ml = 10 ml per dos. Tre gånger dagligen → 10 ml × 3"},
+  { id:38, cat:"DOS", src:"Läkemedelsberäkning 2",
+    q:"Doktacillin im: 1 g löses i 4 ml vatten. Patient ordineras Doktacillin 325 mg × 4.\nHur många ml ska ges per doseringstillfälle?",
+    type:"calc", parts:[
+      {label:"Volym", answer:"1,3", unit:"ml", hint:"Styrka: 1 g/4 ml = 250 mg/ml. 325 ÷ 250 = 1,3 ml"}]},
+  { id:39, cat:"DOS", src:"Exempeltenta 3",
+    q:"Catapresan 15 µg/ml ska ges iv till en patient (55 kg). Ordineras 1,5 µg/kg.\nHur många ml innebär det?",
+    type:"calc", parts:[
+      {label:"Volym", answer:"5,5", unit:"ml", hint:"Dos: 1,5 µg/kg × 55 kg = 82,5 µg. Volym: 82,5 ÷ 15 = 5,5 ml"}]},
+  { id:40, cat:"DOS", src:"Exempeltenta 3",
+    q:"Eric (Alzheimers) ordineras Exelon Depotplåster 13,3 mg/24 timmar kl. 8.00. Efter 8 timmar trillar plåstret av.\nHur många mg verksam substans har Eric fått? (en decimal)",
+    type:"calc", parts:[
+      {label:"Substans", answer:"4,4", unit:"mg", hint:"13,3 mg/24 h × 8 h = 4,43 ≈ 4,4 mg"}]},
+  { id:41, cat:"DOS", src:"Exempeltenta 3",
+    q:"Person med diabetes typ-1 ska resa bort 20 dagar. NovoRapid 100 E/ml i förfylld penna (3 ml). Ordination: 6 E frukost, 8 E lunch, 10 E kväll.\nHur många hela injektionspennor måste personen ta med?",
+    type:"calc", parts:[
+      {label:"Antal pennor", answer:"2", unit:"pennor", hint:"Per dag: 6+8+10=24 E. Total: 24×20=480 E. Per penna: 3×100=300 E. Antal: 480÷300=1,6 → 2 hela pennor"}]},
+  { id:42, cat:"DOS", src:"Exempeltenta 1_2",
+    q:"Du har givit din patient 8,5 ml lösning av Cyklokapron 100 mg/ml.\nHur mycket aktiv substans har patienten fått? Ange i gram.",
+    type:"calc", parts:[
+      {label:"Substans", answer:"0,85", unit:"gram", hint:"8,5 ml × 100 mg/ml = 850 mg = 0,85 gram"}]},
+  { id:43, cat:"DOS", src:"Exempeltenta 1_2",
+    q:"Cyklokapron 1 g = 10 ml ges som långsam iv injektion med hastigheten 1 ml/minut.\nHur många mg aktiv substans/minut är det?",
+    type:"calc", parts:[
+      {label:"mg/min", answer:"100", unit:"mg/min", hint:"1 g = 1000 mg i 10 ml → 100 mg/ml. 1 ml/min × 100 mg/ml = 100 mg/min"}]},
+  { id:44, cat:"DOS", src:"Exempeltenta 3",
+    q:"Ordination: Cilaxoral orala droppar 7,5 mg/ml, 0,4 ml kl. 08. (1 ml = 20 droppar)\nHur många droppar innebär ordinationen?",
+    type:"calc", parts:[
+      {label:"Droppar", answer:"8", unit:"droppar", hint:"0,4 ml × 20 dr/ml = 8 droppar"}]},
+  { id:45, cat:"DOS", src:"Läkemedelsberäkning 1",
+    q:"Din patient är ordinerad oral lösning Bisolvon 1,6 mg/ml, 5 ml × 3/dag.\nHur många dagar räcker en flaska 250 ml Bisolvon?",
+    type:"calc", parts:[
+      {label:"Dagar", answer:"16", unit:"dagar", hint:"Per dag: 5 ml × 3 = 15 ml. 250 ÷ 15 = 16,67 → 16 hela dagar"}]},
+  { id:46, cat:"DOS", src:"Exempeltenta 3",
+    q:"Malvitona oral lösning: 30 ml 2 ggr/dag.\n(a) Hur länge räcker en flaska 700 ml?\n(b) 700 ml innehåller 109,9 g etanol. Vilken procent är det? (en decimal)",
+    type:"calc", parts:[
+      {label:"(a) Dagar", answer:"11", unit:"dagar", hint:"Per dag: 30×2=60 ml. 700÷60=11,67 → 11 hela dagar"},
+      {label:"(b) Procent", answer:"15,7", unit:"%", hint:"% = g/100ml. 109,9÷700×100 = 15,7%"}]},
+  { id:47, cat:"DOS", src:"Läkemedelsberäkning 3",
+    q:"2%-ig Xylocain gel används för bedövning inför KAD. 12 g av Xylocain gel appliceras.\nBeräkna den verksamma substansen lidocain. (2% gel = 20 mg/g)",
+    type:"calc", parts:[
+      {label:"Substans", answer:"240", unit:"mg", hint:"20 mg/g × 12 g = 240 mg lidocain"}]},
+  { id:48, cat:"DOS", src:"Läkemedelsberäkning 3",
+    q:"Alma Alm ordineras Enalapril 20 mg (stora tabletter). Vill byta till Enalapril 2,5 mg.\nHur många tabletter à 2,5 mg behöver Alma ta för att motsvara 20 mg?",
+    type:"calc", parts:[
+      {label:"Tabletter", answer:"8", unit:"tabletter", hint:"20 mg ÷ 2,5 mg = 8 tabletter"}]},
+  // ── SYRGAS ────────────────────────────────────────────────────
+  { id:49, cat:"SYRGAS", src:"Exempeltenta 1 / LMB Nivå 2",
+    q:"Din patient (behöver ≥3 l/min syrgas) ska transporteras i 20 minuter. Du har en 2,5-liters transportflaska.\nVilket tryck är lägsta möjliga på manometern?",
+    type:"calc", parts:[
+      {label:"Minimitryck", answer:"24", unit:"bar", hint:"Behov: 3 l/min × 20 min = 60 l. Tryck: 60 ÷ 2,5 = 24 bar"}]},
+  { id:50, cat:"SYRGAS", src:"Exempeltenta 2",
+    q:"Din patient (behöver ≥6 l/min syrgas) ska transporteras i 20 minuter. Du har en 3-liters transportflaska.\nVilket tryck är lägsta möjliga på manometern?",
+    type:"calc", parts:[
+      {label:"Minimitryck", answer:"40", unit:"bar", hint:"Behov: 6 × 20 = 120 l. Tryck: 120 ÷ 3 = 40 bar"}]},
+  { id:51, cat:"SYRGAS", src:"Exempeltenta 2_1",
+    q:"Din patient (behöver ≥4 l/min syrgas) ska transporteras i 40 minuter. Du har en 2,5-liters transportflaska.\nVilket tryck är lägsta möjliga på manometern?",
+    type:"calc", parts:[
+      {label:"Minimitryck", answer:"64", unit:"bar", hint:"Behov: 4 × 40 = 160 l. Tryck: 160 ÷ 2,5 = 64 bar"}]},
+  { id:52, cat:"SYRGAS", src:"Exempeltenta 1_2",
+    q:"Din patient (behöver ≥5 l/min syrgas) ska transporteras i 15 minuter. Du har en 3-liters transportflaska.\nVilket tryck är lägsta möjliga på manometern?",
+    type:"calc", parts:[
+      {label:"Minimitryck", answer:"25", unit:"bar", hint:"Behov: 5 × 15 = 75 l. Tryck: 75 ÷ 3 = 25 bar"}]},
+  { id:53, cat:"SYRGAS", src:"Läkemedelsberäkning 3",
+    q:"Syrgastub (2,5 l) ska räcka i 25 minuter vid 5 l/min. (Boyles lag: V × P = disponibel gas)\nVilket tryck måste du kunna avläsa?",
+    type:"calc", parts:[
+      {label:"Tryck", answer:"50", unit:"bar", hint:"Behov: 5 × 25 = 125 l. Tryck: 125 ÷ 2,5 = 50 bar"}]},
+  { id:54, cat:"SYRGAS", src:"LMB Nivå 2 / Exempeltenta 1",
+    q:"I en ambulans finns två syrgasflaskor:\n• Tub 1: Volym 3 l, tryck 150 bar\n• Tub 2: Volym 10 l, tryck 200 bar\n(a) Hur många minuter räcker syrgasen vid 10 l/min?\n(b) Hur många timmar och minuter är det?",
+    type:"calc", parts:[
+      {label:"(a) Minuter", answer:"245", unit:"minuter", hint:"Tub 1: 3×150=450 l. Tub 2: 10×200=2000 l. Totalt: 2450 l. 2450÷10=245 min"},
+      {label:"(b) Timmar & min", answer:"4 timmar och 5 minuter", unit:"", hint:"245 min = 4×60+5 = 4 h 5 min"}]},
+  { id:55, cat:"SYRGAS", src:"Exempeltenta 2",
+    q:"Ambulans: Två 3-litersflaskor med tryck 120 bar resp. 110 bar.\nHur länge räcker syrgasen om patienten kräver 5 l/min?\nAnge i timmar och minuter.",
+    type:"calc", parts:[
+      {label:"Tid", answer:"2 timmar och 18 minuter", unit:"", hint:"Fl. 1: 3×120=360 l. Fl. 2: 3×110=330 l. Total: 690 l. 690÷5=138 min = 2 h 18 min"}]},
+  { id:56, cat:"SYRGAS", src:"Exempeltenta 2 / 3",
+    q:"En kvinna med buksmärtor kopplas grimma 2 l/min. Transportflaskan: 2,5 l, manometern visar 160 bar.\n(a) Hur länge räcker syrgasen i minuter?\n(b) Hur många timmar och minuter är det?",
+    type:"calc", parts:[
+      {label:"(a) Minuter", answer:"200", unit:"minuter", hint:"2,5 × 160 = 400 l disponibel. 400 ÷ 2 = 200 min"},
+      {label:"(b) Timmar & min", answer:"3 timmar och 20 minuter", unit:"", hint:"200 min = 3×60+20 = 3 h 20 min"}]},
+  { id:57, cat:"SYRGAS", src:"Läkemedelsberäkning 2",
+    q:"Patient ordineras 3 l/min andningsoxygen. Manometern visar 120 bar, volymen är 5 liter.\nHur lång tid räcker flaskan?\nAnge svaret i timmar och minuter.",
+    type:"calc", parts:[
+      {label:"Tid", answer:"3 timmar och 20 minuter", unit:"", hint:"5 × 120 = 600 l disponibel. 600 ÷ 3 = 200 min = 3 h 20 min"}]},
+  { id:58, cat:"SYRGAS", src:"LMB Nivå 2 / Läkemedelsberäkning 2",
+    q:"Patient med lungödem: 10 l/min syrgas. Transportabel oxygenflaska (10 l), tryck 200 bar. \nEfter 1 timme visar manometern 100 bar.\nHar patienten fått 10 l/min?",
+    type:"mc", options:["Ja, patienten har fått 10 l/min","Nej – patienten har fått ca 16,7 l/min","Nej – patienten har fått 5 l/min","Det går inte att avgöra"], correct:1,
+    explanation:"Förbrukat: (200−100)×10 = 1000 l på 60 min → 1000÷60 ≈ 16,7 l/min. Mer än ordinerat."},
+  { id:59, cat:"SYRGAS", src:"Läkemedelsberäkning 3",
+    q:"Syrgastuben har volymen 2,5 l, manometern visar 200 bar.\nBeräkna disponibel mängd syrgas med Boyles lag (V × P).",
+    type:"calc", parts:[
+      {label:"Disponibel gas", answer:"500", unit:"liter", hint:"V × P = 2,5 × 200 = 500 liter"}]},
+  // ── ENHETER & BEGREPP ────────────────────────────────────────
+  { id:60, cat:"BEGREPP", src:"Läkemedelsberäkning 1",
+    q:"Hur lång tid är 234 minuter?\nVälj rätt alternativ:",
+    type:"mc", options:["3 timmar och 34 minuter","2 timmar och 34 minuter","3 timmar och 53 minuter","3 timmar och 54 minuter"], correct:3,
+    explanation:"234 ÷ 60 = 3 h rest 54 min → 3 timmar och 54 minuter"},
+  { id:61, cat:"BEGREPP", src:"Läkemedelsberäkning 3",
+    q:"Vad stämmer om internationell enhet (E/IE) enligt kurslitteraturen?\nVälj ett alternativ:",
+    type:"mc", options:["En internationell enhet = 20 droppar","Internationella enheter anger antal gram per 100 ml","Internationella enheter är ett standardiserat mått på den biologiska aktiviteten hos vissa läkemedel","Internationella enheter uttrycks ofta i enheten mmol"], correct:2,
+    explanation:"Internationell enhet (E) är ett standardiserat mått på biologisk aktivitet – används t.ex. för insulin, heparin och vitaminer."},
+  { id:62, cat:"BEGREPP", src:"Läkemedelsberäkning 1",
+    q:"Sant eller Falskt?\n\"Styrka är den farmakologisk aktiva substansen i ett läkemedel, det vill säga den beståndsdel som ger farmakologisk effekt i kroppen.\"",
+    type:"mc", options:["Sant","Falskt"], correct:1,
+    explanation:"FALSKT. Verksam substans är det aktiva ämnet. Styrka anger koncentrationen (t.ex. mg/ml, %)."},
+  { id:63, cat:"BEGREPP", src:"Läkemedelsberäkning 1",
+    q:"Sant eller Falskt?\n\"Verksam substans är den farmakologisk aktiva substansen i ett läkemedel, det vill säga den beståndsdel som ger farmakologisk effekt i kroppen.\"",
+    type:"mc", options:["Sant","Falskt"], correct:0,
+    explanation:"SANT. Verksam substans = det aktiva ämnet i läkemedlet som ger önskad farmakologisk effekt."},
+  { id:64, cat:"BEGREPP", src:"Läkemedelsberäkning 1",
+    q:"Enhetsbyte:\n500 milligram = ? mikrogram",
+    type:"calc", parts:[
+      {label:"Svar", answer:"500 000", unit:"µg", hint:"1 mg = 1000 µg. 500 × 1000 = 500 000 µg"}]},
+  { id:65, cat:"BEGREPP", src:"Läkemedelsberäkning 1",
+    q:"Enhetsbyte:\n40 mikrogram = ? milligram",
+    type:"calc", parts:[
+      {label:"Svar", answer:"0,04", unit:"mg", hint:"40 µg ÷ 1000 = 0,04 mg"}]},
+  { id:66, cat:"BEGREPP", src:"Läkemedelsberäkning 1",
+    q:"Enhetsbyte:\n0,2 milliliter = ? mikroliter",
+    type:"calc", parts:[
+      {label:"Svar", answer:"200", unit:"µl", hint:"1 ml = 1000 µl. 0,2 × 1000 = 200 µl"}]},
+  { id:67, cat:"BEGREPP", src:"Exempeltenta 2_1",
+    q:"Vilken styrka i % har en lösning som innehåller 70 mg/ml?\n(Formel: % = g per 100 ml)",
+    type:"calc", parts:[
+      {label:"Procent", answer:"7", unit:"%", hint:"70 mg/ml = 7 g/100 ml = 7%"}]},
+  { id:68, cat:"BEGREPP", src:"Läkemedelsberäkning 1",
+    q:"Uttryck styrkan för Glukos 10% i mg/ml.\n(Formel: % = g per 100 ml)",
+    type:"calc", parts:[
+      {label:"Styrka", answer:"100", unit:"mg/ml", hint:"10% = 10 g/100 ml = 0,1 g/ml = 100 mg/ml"}]},
+  { id:69, cat:"BEGREPP", src:"Läkemedelsberäkning 3",
+    q:"Markera samtliga enheter som kopplas till begreppet styrka enligt kurslitteraturen.\nVilket alternativ är KORREKT?",
+    type:"mc", options:["mg, tabletter och stycken","mg/ml, % och mmol/ml","ml och µl","E och droppar"], correct:1,
+    explanation:"Styrka anges i koncentrationsenheter som mg/ml, % och mmol/ml – inte i mängdenheter som mg, tabletter eller stycken."},
+  { id:70, cat:"BEGREPP", src:"Exempeltenta 1_2",
+    q:"Hur många hela doser om 8,5 ml räcker en förpackning med 5 ampuller à 5 ml Cyklokapron till?",
+    type:"calc", parts:[
+      {label:"Antal doser", answer:"2", unit:"doser", hint:"5 amp × 5 ml = 25 ml totalt. 25 ÷ 8,5 = 2,94 → 2 hela doser"}]},
+  { id:71, cat:"DOS", src:"Exempeltenta 1_2",
+    q:"Doxyferm infusionskoncentrat 20 mg/ml. Två ampuller à 5 ml tillsätts 500 ml NaCl 9 mg/ml, ges under 1,5 h till patient (80 kg).\n(a) Hur mycket verksam substans finns i lösningen?\n(b) Hur många µg verksam substans/kg/min får patienten? (en decimal)",
+    type:"calc", parts:[
+      {label:"(a) Total substans", answer:"200", unit:"mg", hint:"2 amp × 5 ml × 20 mg/ml = 200 mg"},
+      {label:"(b) µg/kg/min", answer:"27,8", unit:"µg/kg/min", hint:"200 mg = 200 000 µg. Tid: 1,5 h = 90 min. 200 000÷(90×80) = 27,8 µg/kg/min"}]},
+];
+
+const STUDY_PLAN = [
+  { week:"Vecka 1–2 (19 feb – 4 mar)", focus:["BEGREPP","DOS"], sessions:4, duration:20, tip:"Grundläggande enheter, dosberäkning och spädningsformler" },
+  { week:"Vecka 3–4 (5 – 18 mar)", focus:["SPADNING","INFUSION"], sessions:5, duration:25, tip:"Spädningstekniker och infusionshastigheter – kärnkompetenser" },
+  { week:"Vecka 5–6 (19 mar – 1 apr)", focus:["SYRGAS","INFUSION"], sessions:5, duration:30, tip:"Syrgas (Boyles lag) och Furix-frågor – klassiska tentafällor" },
+  { week:"Vecka 7 (2 – 7 apr)", focus:["SPADNING","DOS","SYRGAS","INFUSION","BEGREPP"], sessions:6, duration:30, tip:"Slumptentor med alla kategorier – simulera verklig tentasituation" },
+];
+
+// ── HELPERS ────────────────────────────────────────────────────
+const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+
+function loadHistory() {
+  try { const s = localStorage.getItem("lmb_history_v2"); return s ? JSON.parse(s) : {}; } catch(e) { return {}; }
+}
+function saveHistoryStore(h) {
+  try { localStorage.setItem("lmb_history_v2", JSON.stringify(h)); } catch(e) {}
+}
+
+// ── APP ────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState("home");
+  const [session, setSession] = useState(null);
+  const [qIndex, setQIndex] = useState(0);
+  const [answered, setAnswered] = useState(false);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [results, setResults] = useState([]);
+  const [history, setHistory] = useState(loadHistory);
+  const [showPlan, setShowPlan] = useState(false);
+  const [sessionTime, setSessionTime] = useState(0);
+  const timerRef = useRef(null);
+
+  const saveHistory = (h) => { setHistory(h); saveHistoryStore(h); };
+
+  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+
+  const getWeight = (q) => {
+    const h = history[q.id];
+    if (!h || h.length === 0) return 3;
+    const recent = h.slice(-3);
+    const correct = recent.filter(Boolean).length;
+    if (correct === 3) return 1;
+    if (correct === 2) return 2;
+    return 4;
+  };
+
+  const buildSession = (cat = "ALL") => {
+    const pool = cat === "ALL" ? QUESTIONS : QUESTIONS.filter(q => q.cat === cat);
+    const weighted = [];
+    pool.forEach(q => { for (let i = 0; i < getWeight(q); i++) weighted.push(q); });
+    const shuffled = [...weighted].sort(() => Math.random() - 0.5);
+    const seen = new Set(); const selected = [];
+    for (const q of shuffled) {
+      if (!seen.has(q.id)) { seen.add(q.id); selected.push(q); }
+      if (selected.length === 12) break;
+    }
+    if (selected.length < 12) {
+      const rest = pool.filter(q => !seen.has(q.id)).sort(() => Math.random() - 0.5);
+      selected.push(...rest.slice(0, 12 - selected.length));
+    }
+    return selected.slice(0, 12);
+  };
+
+  const startSession = (cat = "ALL") => {
+    stopTimer();
+    setSession(buildSession(cat));
+    setQIndex(0); setAnswered(false); setSelectedOption(null);
+    setResults([]); setSessionTime(0);
+    setScreen("quiz");
+    timerRef.current = setInterval(() => setSessionTime(t => t + 1), 1000);
+  };
+
+  const goHome = () => { stopTimer(); setScreen("home"); };
+
+  const handleMCAnswer = (idx) => {
+    if (answered) return;
+    setSelectedOption(idx);
+    setAnswered(true);
+    const q = session[qIndex];
+    const correct = idx === q.correct;
+    setResults(r => [...r, { q, correct, selectedOption: idx }]);
+    saveHistory({ ...history, [q.id]: [...(history[q.id] || []), correct].slice(-10) });
+  };
+
+  const handleCalcReveal = () => {
+    setAnswered(true);
+    const q = session[qIndex];
+    setResults(r => [...r, { q, correct: null }]);
+  };
+
+  const handleCalcScore = (correct) => {
+    setResults(r => { const u = [...r]; u[u.length-1] = {...u[u.length-1], correct}; return u; });
+    const q = session[qIndex];
+    saveHistory({ ...history, [q.id]: [...(history[q.id] || []), correct].slice(-10) });
+  };
+
+  const nextQuestion = () => {
+    if (qIndex + 1 >= session.length) { stopTimer(); setScreen("results"); return; }
+    setQIndex(i => i + 1); setAnswered(false); setSelectedOption(null);
+  };
+
+  const prevQuestion = () => {
+    if (qIndex === 0) return;
+    const prevIdx = qIndex - 1;
+    const prevResult = results[prevIdx];
+    setQIndex(prevIdx);
+    setAnswered(prevResult !== undefined);
+    setSelectedOption(prevResult?.selectedOption ?? null);
+    setResults(r => r.slice(0, prevIdx));
+  };
+
+  // ── Stats ──────────────────────────────────────────────────
+  const catStats = Object.entries(CATEGORIES).map(([key, cat]) => {
+    const qs = QUESTIONS.filter(q => q.cat === key);
+    const attempts = qs.reduce((s, q) => s + (history[q.id]?.length || 0), 0);
+    const corrects = qs.reduce((s, q) => s + (history[q.id]?.filter(Boolean).length || 0), 0);
+    return { key, ...cat, total: qs.length, attempts, corrects, rate: attempts > 0 ? Math.round(corrects/attempts*100) : null };
+  });
+  const totalAttempts = catStats.reduce((s, c) => s + c.attempts, 0);
+  const totalCorrAll  = catStats.reduce((s, c) => s + c.corrects, 0);
+  const overallRate   = totalAttempts > 0 ? Math.round(totalCorrAll/totalAttempts*100) : null;
+  const totalCorrect  = results.filter(r => r.correct === true).length;
+  const totalAnswered = results.filter(r => r.correct !== null).length;
+  const passRate      = totalAnswered > 0 ? Math.round(totalCorrect/totalAnswered*100) : 0;
+
+  // ── SCREENS ────────────────────────────────────────────────
+  if (screen === "quiz" && session) return (
+    <QuizScreen
+      q={session[qIndex]} qIndex={qIndex} total={session.length}
+      answered={answered} selectedOption={selectedOption}
+      results={results} sessionTime={sessionTime}
+      onMCAnswer={handleMCAnswer} onReveal={handleCalcReveal}
+      onCalcScore={handleCalcScore} onNext={nextQuestion}
+      onPrev={prevQuestion} onHome={goHome}
+    />
+  );
+
+  if (screen === "results") return (
+    <ResultsScreen
+      results={results} passRate={passRate}
+      totalCorrect={totalCorrect} totalAnswered={totalAnswered}
+      sessionTime={sessionTime}
+      onNewSession={() => startSession()}
+      onHome={goHome}
+    />
+  );
+
+  return (
+    <HomeScreen
+      catStats={catStats} overallRate={overallRate}
+      totalAttempts={totalAttempts} showPlan={showPlan}
+      setShowPlan={setShowPlan} onStart={startSession}
+      onReset={() => { saveHistory({}); }}
+    />
+  );
+}
+
+// ── HOME ───────────────────────────────────────────────────────
+function HomeScreen({ catStats, overallRate, totalAttempts, showPlan, setShowPlan, onStart, onReset }) {
+  const rateColor = overallRate === null ? "#94a3b8" : overallRate >= 90 ? "#16a34a" : overallRate >= 70 ? "#d97706" : "#dc2626";
+  return (
+    <div style={{minHeight:"100vh", background:"#f8fafc", paddingBottom:40}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%)", padding:"env(safe-area-inset-top, 0) 20px 28px", textAlign:"center"}}>
+        <div style={{paddingTop:16}}>
+          <div style={{fontSize:48, marginBottom:6}}>💊</div>
+          <h1 style={{fontSize:26, fontWeight:800, color:"#fff", margin:"0 0 2px", letterSpacing:-0.5}}>LMB Träning</h1>
+          <p style={{fontSize:13, color:"#94a3b8", margin:0}}>Omtenta-träning · 7 april 2026</p>
+          <div style={{display:"inline-flex", gap:24, marginTop:16, background:"#ffffff14", padding:"10px 28px", borderRadius:16}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:36, fontWeight:900, color:"#60a5fa", lineHeight:1}}>{DAYS_LEFT}</div>
+              <div style={{fontSize:11, color:"#93c5fd", letterSpacing:1}}>DAGAR KVAR</div>
+            </div>
+            <div style={{width:1, background:"#ffffff22"}}/>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:36, fontWeight:900, color: rateColor, lineHeight:1}}>{overallRate !== null ? `${overallRate}%` : "–"}</div>
+              <div style={{fontSize:11, color:"#94a3b8", letterSpacing:1}}>ANDEL RÄTT</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:"20px 16px"}}>
+        {/* Quick stats */}
+        <div style={{display:"flex", gap:10, marginBottom:20}}>
+          {[{v:QUESTIONS.length,l:"Frågor"},{v:totalAttempts,l:"Försök"},{v:catStats.filter(c=>c.rate>=90).length,l:"Kategorier ≥90%"}].map((s,i)=>(
+            <div key={i} style={{flex:1, background:"#fff", borderRadius:12, padding:"12px 8px", textAlign:"center", boxShadow:"0 1px 3px #0001"}}>
+              <div style={{fontSize:22, fontWeight:800, color:"#1e293b"}}>{s.v}</div>
+              <div style={{fontSize:10, color:"#94a3b8", marginTop:1}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Categories */}
+        <h2 style={{fontSize:14, fontWeight:700, color:"#64748b", letterSpacing:1, margin:"0 0 10px"}}>KATEGORIER</h2>
+        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20}}>
+          {catStats.map(cat => (
+            <button key={cat.key} onClick={() => onStart(cat.key)}
+              style={{background:"#fff", border:"none", borderRadius:14, padding:"14px 12px", cursor:"pointer", textAlign:"left",
+                boxShadow:"0 1px 4px #0001", borderLeft:`4px solid ${cat.color}`}}>
+              <div style={{fontSize:22}}>{cat.icon}</div>
+              <div style={{fontSize:12, fontWeight:700, color:"#1e293b", marginTop:4, lineHeight:1.3}}>{cat.label}</div>
+              <div style={{fontSize:10, color:"#94a3b8", marginTop:1}}>{cat.total} frågor</div>
+              {cat.rate !== null ? (
+                <div style={{marginTop:8}}>
+                  <div style={{height:5, borderRadius:3, background:"#f1f5f9"}}>
+                    <div style={{height:"100%", borderRadius:3, background:cat.color, width:`${cat.rate}%`, transition:"width .5s"}}/>
+                  </div>
+                  <div style={{fontSize:11, color:cat.color, fontWeight:700, marginTop:2}}>{cat.rate}% rätt</div>
+                </div>
+              ) : (
+                <div style={{fontSize:10, color:"#cbd5e1", marginTop:8}}>Ej tränad ännu</div>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Main CTA */}
+        <button onClick={() => onStart("ALL")} style={{width:"100%", padding:"17px 20px",
+          background:"linear-gradient(135deg,#1e40af,#0891b2)", color:"#fff", border:"none",
+          borderRadius:14, fontSize:17, fontWeight:700, cursor:"pointer", letterSpacing:-0.3,
+          boxShadow:"0 4px 14px #0891b240", marginBottom:8}}>
+          🎲 Slumpad tenta – 12 frågor
+        </button>
+        <p style={{fontSize:12, color:"#94a3b8", textAlign:"center", margin:"0 0 20px"}}>
+          Viktar mot dina svagaste frågor automatiskt
+        </p>
+
+        {/* Study plan */}
+        <button onClick={() => setShowPlan(!showPlan)}
+          style={{width:"100%", padding:12, background:"#fff", border:"2px solid #e2e8f0",
+            borderRadius:12, fontSize:14, fontWeight:600, cursor:"pointer", color:"#475569", marginBottom: showPlan ? 10 : 0}}>
+          📅 {showPlan ? "Dölj" : "Visa"} studieplan inför 7 april
+        </button>
+
+        {showPlan && (
+          <div style={{background:"#fff", borderRadius:14, padding:18, boxShadow:"0 1px 4px #0001"}}>
+            <p style={{fontSize:12, color:"#64748b", margin:"0 0 14px", fontStyle:"italic"}}>
+              Med {DAYS_LEFT} dagar kvar · Målet: 100% rätt på tentan
+            </p>
+            {STUDY_PLAN.map((w,i) => (
+              <div key={i} style={{background:"#f8fafc", borderRadius:10, padding:"11px 13px",
+                marginBottom:8, borderLeft:"3px solid #0891b2"}}>
+                <div style={{fontSize:12, fontWeight:700, color:"#0891b2"}}>{w.week}</div>
+                <div style={{fontSize:11, color:"#475569", marginTop:2}}>
+                  Fokus: {w.focus.map(k=>CATEGORIES[k].label).join(", ")}
+                </div>
+                <div style={{fontSize:10, color:"#94a3b8", marginTop:1}}>
+                  {w.sessions} sessioner/vecka · {w.duration} min/session
+                </div>
+                <div style={{fontSize:11, color:"#64748b", marginTop:5, fontStyle:"italic"}}>💡 {w.tip}</div>
+              </div>
+            ))}
+            <div style={{background:"#eff6ff", borderRadius:10, padding:"11px 13px", marginTop:4, fontSize:12, color:"#1e40af"}}>
+              <strong>Mål för 100%:</strong> Klara varje kategori med 100% rätt i 5 sessioner i rad. Skriv alltid uträkningar på papper.
+            </div>
+          </div>
+        )}
+
+        {totalAttempts > 0 && (
+          <button onClick={onReset}
+            style={{width:"100%", padding:10, background:"none", border:"1px solid #fca5a5",
+              borderRadius:10, fontSize:12, color:"#ef4444", cursor:"pointer", marginTop:16}}>
+            Återställ statistik
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── QUIZ ───────────────────────────────────────────────────────
+function QuizScreen({ q, qIndex, total, answered, selectedOption, results, sessionTime,
+  onMCAnswer, onReveal, onCalcScore, onNext, onPrev, onHome }) {
+
+  const pct = (qIndex / total) * 100;
+  const lastResult = results[results.length - 1];
+
+  return (
+    <div style={{minHeight:"100vh", background:"#f8fafc", fontFamily:"inherit",
+      paddingBottom:80, maxWidth:520, margin:"0 auto"}}>
+
+      {/* Header bar */}
+      <div style={{display:"flex", alignItems:"center", gap:8, padding:"env(safe-area-inset-top,12px) 16px 10px",
+        background:"#fff", boxShadow:"0 1px 4px #0001", position:"sticky", top:0, zIndex:10}}>
+        <button onClick={onPrev} disabled={qIndex===0}
+          style={{width:36, height:36, borderRadius:10, background:qIndex===0?"#f8fafc":"#f1f5f9",
+            border:"none", cursor:qIndex===0?"default":"pointer",
+            opacity:qIndex===0?0.3:1, fontSize:14, color:"#475569", flexShrink:0}}>◀</button>
+        <div style={{flex:1}}>
+          <div style={{height:6, borderRadius:3, background:"#f1f5f9", overflow:"hidden"}}>
+            <div style={{height:"100%", borderRadius:3,
+              background:"linear-gradient(90deg,#0891b2,#6366f1)", width:`${pct}%`, transition:"width .4s"}}/>
+          </div>
+          <div style={{fontSize:11, color:"#94a3b8", textAlign:"center", marginTop:3}}>
+            {qIndex+1} / {total}
+          </div>
+        </div>
+        <div style={{fontSize:13, color:"#64748b", fontVariantNumeric:"tabular-nums", minWidth:44, textAlign:"center"}}>
+          {fmtTime(sessionTime)}
+        </div>
+        <button onClick={onHome}
+          style={{width:36, height:36, borderRadius:10, background:"#f1f5f9",
+            border:"none", cursor:"pointer", fontSize:15, flexShrink:0}}>🏠</button>
+      </div>
+
+      <div style={{padding:"16px 16px 0"}}>
+        {/* Cat badge */}
+        <div style={{display:"inline-flex", alignItems:"center", gap:6, padding:"4px 12px",
+          borderRadius:20, fontSize:12, fontWeight:700, marginBottom:4,
+          background:CATEGORIES[q.cat].color+"18", color:CATEGORIES[q.cat].color,
+          border:`1.5px solid ${CATEGORIES[q.cat].color}44`}}>
+          {CATEGORIES[q.cat].icon} {CATEGORIES[q.cat].label}
+        </div>
+        <div style={{fontSize:10, color:"#94a3b8", marginBottom:12}}>Källa: {q.src}</div>
+
+        {/* Question */}
+        <div style={{background:"#fff", borderRadius:16, padding:"18px 16px", marginBottom:16,
+          boxShadow:"0 1px 6px #0002", fontSize:14.5, color:"#1e293b", lineHeight:1.75}}>
+          {q.q.split('\n').map((line,i) => <p key={i} style={{margin:"3px 0"}}>{line}</p>)}
+        </div>
+
+        {/* MC */}
+        {q.type==="mc" && (
+          <div style={{display:"flex", flexDirection:"column", gap:9}}>
+            {q.options.map((opt,i) => {
+              let bg="#fff", border="1.5px solid #e2e8f0", color="#1e293b", fw=500;
+              if (answered) {
+                if (i===q.correct) { bg="#dcfce7"; border="2px solid #16a34a"; color="#15803d"; fw=700; }
+                else if (i===selectedOption && i!==q.correct) { bg="#fee2e2"; border="2px solid #dc2626"; color="#dc2626"; }
+                else { color="#94a3b8"; }
+              }
+              return (
+                <button key={i} onClick={() => onMCAnswer(i)}
+                  style={{display:"flex", alignItems:"center", gap:10, width:"100%", padding:"13px 14px",
+                    borderRadius:12, background:bg, border, color, cursor:answered?"default":"pointer",
+                    textAlign:"left", fontSize:14, fontWeight:fw, lineHeight:1.4, transition:"all .15s"}}>
+                  <span style={{width:26, height:26, borderRadius:7, background:answered&&i===q.correct?"#bbf7d0":answered&&i===selectedOption&&i!==q.correct?"#fecaca":"#f1f5f9",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontWeight:800, fontSize:12, flexShrink:0, color:"#475569"}}>
+                    {answered && i===q.correct ? "✓" : answered && i===selectedOption && i!==q.correct ? "✗" : String.fromCharCode(65+i)}
+                  </span>
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Calc */}
+        {q.type==="calc" && !answered && (
+          <div style={{textAlign:"center", marginTop:8}}>
+            <p style={{color:"#64748b", fontSize:14, marginBottom:14}}>
+              Beräkna svaret, skriv det på papper, klicka sedan på "Visa facit"
+            </p>
+            <button onClick={onReveal}
+              style={{width:"100%", padding:15, background:"linear-gradient(135deg,#0891b2,#0e7490)",
+                color:"#fff", border:"none", borderRadius:13, fontSize:15, fontWeight:700, cursor:"pointer"}}>
+              🔍 Visa facit
+            </button>
+          </div>
+        )}
+
+        {/* Calc answer */}
+        {answered && q.type==="calc" && (
+          <div style={{background:"#f0fdf4", border:"2px solid #bbf7d0", borderRadius:14, padding:16}}>
+            {q.parts.map((p,i) => (
+              <div key={i} style={{marginBottom:14, paddingBottom:12,
+                borderBottom:i<q.parts.length-1?"1px solid #d1fae5":"none"}}>
+                <div style={{fontSize:12, fontWeight:700, color:"#15803d", marginBottom:5}}>{p.label}</div>
+                <div style={{fontSize:30, fontWeight:900, color:"#15803d", fontFamily:"'Courier New',monospace", lineHeight:1}}>
+                  {p.answer}{p.unit ? <span style={{fontSize:16, fontWeight:600, marginLeft:4}}>{p.unit}</span> : null}
+                </div>
+                <div style={{fontSize:12, color:"#166534", background:"#dcfce7", padding:"7px 10px",
+                  borderRadius:8, marginTop:8, lineHeight:1.6}}>💡 {p.hint}</div>
+              </div>
+            ))}
+            {lastResult?.correct === null && (
+              <div style={{marginTop:4}}>
+                <p style={{margin:"10px 0 8px", fontWeight:600, color:"#475569", fontSize:14}}>Hade du rätt?</p>
+                <div style={{display:"flex", gap:10}}>
+                  <button onClick={() => onCalcScore(true)}
+                    style={{flex:1, padding:12, borderRadius:10, fontSize:15, fontWeight:700,
+                      cursor:"pointer", background:"#dcfce7", color:"#15803d", border:"2px solid #16a34a"}}>
+                    ✓ Rätt!
+                  </button>
+                  <button onClick={() => onCalcScore(false)}
+                    style={{flex:1, padding:12, borderRadius:10, fontSize:15, fontWeight:700,
+                      cursor:"pointer", background:"#fee2e2", color:"#dc2626", border:"2px solid #dc2626"}}>
+                    ✗ Fel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MC explanation */}
+        {answered && q.type==="mc" && (
+          <div style={{background:"#fffbeb", border:"1.5px solid #fde68a", borderRadius:12,
+            padding:"12px 14px", marginTop:12, fontSize:13, color:"#92400e", lineHeight:1.7}}>
+            <strong>Förklaring:</strong> {q.explanation}
+          </div>
+        )}
+
+        {/* Next btn */}
+        {answered && lastResult?.correct !== null && (
+          <button onClick={onNext}
+            style={{width:"100%", padding:16, background:"#1e40af", color:"#fff", border:"none",
+              borderRadius:14, fontSize:16, fontWeight:700, cursor:"pointer", marginTop:14,
+              boxShadow:"0 4px 12px #1e40af40"}}>
+            {qIndex+1 >= total ? "Se resultat →" : "Nästa fråga →"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── RESULTS ────────────────────────────────────────────────────
+function ResultsScreen({ results, passRate, totalCorrect, totalAnswered, sessionTime, onNewSession, onHome }) {
+  const perfect = passRate === 100;
+  const bycat = {};
+  results.forEach(r => {
+    if (!bycat[r.q.cat]) bycat[r.q.cat] = {c:0,t:0};
+    if (r.correct!==null) { bycat[r.q.cat].t++; if(r.correct) bycat[r.q.cat].c++; }
+  });
+  return (
+    <div style={{minHeight:"100vh", background:"#f8fafc", padding:"20px 16px 60px", maxWidth:520, margin:"0 auto"}}>
+      {/* Score */}
+      <div style={{background:"#fff", borderRadius:20, padding:"28px 20px", marginBottom:16,
+        boxShadow:"0 2px 12px #0002", textAlign:"center"}}>
+        <div style={{fontSize:72, fontWeight:900, lineHeight:1,
+          color: perfect ? "#15803d" : passRate>=70 ? "#d97706" : "#dc2626"}}>
+          {passRate}%
+        </div>
+        {perfect && <div style={{fontSize:24, marginTop:4}}>🎉 Perfekt!</div>}
+        <div style={{color:"#64748b", fontSize:14, marginTop:6}}>
+          {totalCorrect} av {totalAnswered} rätt · {fmtTime(sessionTime)}
+        </div>
+        {!perfect && (
+          <div style={{background:"#fef9c3", borderRadius:10, padding:"10px 14px", marginTop:12, fontSize:13, color:"#854d0e"}}>
+            💡 Kom ihåg: du behöver 100% på tentan. Gå igenom de frågor du missat och skriv ut lösningsgången för hand.
+          </div>
+        )}
+      </div>
+
+      {/* Category breakdown */}
+      <div style={{background:"#fff", borderRadius:16, padding:"16px", marginBottom:16, boxShadow:"0 1px 4px #0001"}}>
+        <h3 style={{fontSize:13, fontWeight:700, color:"#64748b", margin:"0 0 12px", letterSpacing:1}}>PER KATEGORI</h3>
+        {Object.entries(bycat).map(([cat,{c,t}]) => {
+          const r = t>0?Math.round(c/t*100):0;
+          return (
+            <div key={cat} style={{display:"flex", alignItems:"center", gap:10, marginBottom:10}}>
+              <span style={{fontSize:16}}>{CATEGORIES[cat].icon}</span>
+              <div style={{flex:1}}>
+                <div style={{display:"flex", justifyContent:"space-between", marginBottom:3}}>
+                  <span style={{fontSize:12, fontWeight:600, color:"#1e293b"}}>{CATEGORIES[cat].label}</span>
+                  <span style={{fontSize:12, fontWeight:700, color: r===100?"#16a34a":r>=70?"#d97706":"#dc2626"}}>{r}%</span>
+                </div>
+                <div style={{height:5, borderRadius:3, background:"#f1f5f9"}}>
+                  <div style={{height:"100%", borderRadius:3, background:CATEGORIES[cat].color, width:`${r}%`}}/>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Question list */}
+      <div style={{background:"#fff", borderRadius:16, padding:16, marginBottom:20, boxShadow:"0 1px 4px #0001"}}>
+        <h3 style={{fontSize:13, fontWeight:700, color:"#64748b", margin:"0 0 10px", letterSpacing:1}}>FRÅGOR</h3>
+        {results.map((r,i) => (
+          <div key={i} style={{padding:"9px 11px", marginBottom:6, borderRadius:9,
+            background:"#f8fafc", borderLeft:`4px solid ${r.correct===true?"#16a34a":r.correct===false?"#dc2626":"#94a3b8"}`}}>
+            <div style={{fontSize:11, color:"#64748b"}}>{i+1}. {CATEGORIES[r.q.cat].label}</div>
+            <div style={{fontSize:12, color:"#475569", marginTop:2, lineHeight:1.4}}>
+              {r.q.q.split('\n')[0].slice(0,75)}{r.q.q.split('\n')[0].length>75?"…":""}
+            </div>
+            <div style={{fontSize:12, fontWeight:700, marginTop:4,
+              color:r.correct===true?"#16a34a":r.correct===false?"#dc2626":"#94a3b8"}}>
+              {r.correct===true?"✓ Rätt":r.correct===false?"✗ Fel":"— Ej betygsatt"}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"flex", gap:12}}>
+        <button onClick={onNewSession}
+          style={{flex:1, padding:15, background:"linear-gradient(135deg,#1e40af,#0891b2)",
+            color:"#fff", border:"none", borderRadius:13, fontSize:15, fontWeight:700, cursor:"pointer"}}>
+          🔁 Ny tenta
+        </button>
+        <button onClick={onHome}
+          style={{flex:1, padding:15, background:"#f1f5f9", color:"#475569",
+            border:"none", borderRadius:13, fontSize:15, fontWeight:700, cursor:"pointer"}}>
+          🏠 Hem
+        </button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+<!-- Register Service Worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
